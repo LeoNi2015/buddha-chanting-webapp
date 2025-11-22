@@ -67,9 +67,22 @@ export const useSpeechRecognition = ({ onMatch }) => {
             setTranscript(sessionTranscript);
 
             let totalCount = 0;
-            const chineseMatches = sessionTranscript.match(/阿弥陀佛/g);
-            if (chineseMatches) totalCount += chineseMatches.length;
 
+            // FUZZY COUNTING STRATEGY
+            // Instead of looking for the exact phrase "阿弥陀佛" which can fail if split or misheard,
+            // we count the total number of target characters and divide by 4.
+            // Target characters: 阿, 弥, 陀, 佛, 南, 无
+
+            const targetChars = /[阿弥陀佛南无]/g;
+            const matches = sessionTranscript.match(targetChars);
+
+            if (matches) {
+                // We assume every 4 relevant characters constitute one "chant"
+                // This handles "阿弥陀...佛" or rapid "阿弥陀佛阿弥陀佛" robustly.
+                totalCount = Math.floor(matches.length / 4);
+            }
+
+            // Keep English support as is (phrase based)
             const englishMatches = sessionTranscript.match(/amitabha|amituofo|omitofo/ig);
             if (englishMatches) totalCount += englishMatches.length;
 
