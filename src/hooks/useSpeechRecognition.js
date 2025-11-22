@@ -6,7 +6,14 @@ export const useSpeechRecognition = ({ onMatch }) => {
     const [transcript, setTranscript] = useState('');
 
     const recognitionRef = useRef(null);
-    const processedCountRef = useRef(0); // Track matches in current session
+    const processedCountRef = useRef(0);
+    const onMatchRef = useRef(onMatch);
+    const shouldListenRef = useRef(false); // Track if we INTEND to listen
+
+    // Update the ref whenever onMatch changes so the event handler sees the latest version
+    useEffect(() => {
+        onMatchRef.current = onMatch;
+    }, [onMatch]);
 
     useEffect(() => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -18,96 +25,80 @@ export const useSpeechRecognition = ({ onMatch }) => {
 
         const recognition = new SpeechRecognition();
         recognition.continuous = true;
-        recognition.interimResults = true; // Enable interim results for instant feedback
-        recognition.lang = 'zh-CN'; // Default to Chinese for Nianfo, or 'en-US'
+        recognition.interimResults = true;
+        recognition.lang = 'zh-CN';
 
         recognition.onstart = () => {
             setIsListening(true);
             setError(null);
-            processedCountRef.current = 0; // Reset processed count for new session
+            processedCountRef.current = 0;
         };
 
         recognition.onend = () => {
-            // Auto-restart if it stops unexpectedly while we want it to listen
-            if (isListening) {
+            // Only restart if we still intend to listen (auto-restart for continuous)
+            if (shouldListenRef.current) {
                 try {
                     recognition.start();
                 } catch (e) {
+                    // Ignore errors on restart
                     setIsListening(false);
                 }
             } else {
                 setIsListening(false);
             }
-            processedCountRef.current = 0; // Reset on end/restart
+            processedCountRef.current = 0;
         };
 
         recognition.onerror = (event) => {
             console.error("Speech recognition error", event.error);
             if (event.error === 'not-allowed') {
                 setError("Microphone permission denied.");
+                shouldListenRef.current = false;
                 setIsListening(false);
             }
         };
 
         recognition.onresult = (event) => {
-            // Combine all results (interim + final) to get the full picture of current session
-            let fullTranscript = '';
-            for (let i = event.resultIndex; i < event.results.length; ++i) {
-                fullTranscript += event.results[i][0].transcript;
-            }
-
-            // We need to look at the WHOLE transcript of this session to count correctly,
-            // but event.results accumulates.
-            // Actually, for continuous=true, event.results contains all results for the session.
-            // We should reconstruct the full text from event.results[0] to [length-1].
-
             let sessionTranscript = '';
             for (let i = 0; i < event.results.length; i++) {
                 sessionTranscript += event.results[i][0].transcript;
             }
 
-            setTranscript(sessionTranscript); // Update UI with what we hear
+            setTranscript(sessionTranscript);
 
-            // Count total occurrences in the entire session transcript
             let totalCount = 0;
-
-            // STRICT PHRASE COUNTING (For precise timing on "Fo")
-            // We count full occurrences of "阿弥陀佛". 
-            // Since we use interimResults, this will trigger exactly when the "Fo" character is recognized.
-
             const chineseMatches = sessionTranscript.match(/阿弥陀佛/g);
             if (chineseMatches) totalCount += chineseMatches.length;
 
-            // English variants
             const englishMatches = sessionTranscript.match(/amitabha|amituofo|omitofo/ig);
             if (englishMatches) totalCount += englishMatches.length;
 
-            // Calculate new matches since last check
             const newMatches = totalCount - processedCountRef.current;
 
-            if (newMatches > 0 && onMatch) {
+            if (newMatches > 0 && onMatchRef.current) {
                 for (let i = 0; i < newMatches; i++) {
-                    onMatch();
+                    onMatchRef.current();
                 }
-                processedCountRef.current = totalCount; // Update processed count
+                processedCountRef.current = totalCount;
             }
         };
-
 
         recognitionRef.current = recognition;
 
         return () => {
+            // Cleanup on unmount
+            shouldListenRef.current = false;
             if (recognitionRef.current) {
                 recognitionRef.current.stop();
             }
         };
-    }, [onMatch, isListening]);
+    }, []); // Only run once on mount
 
     const startListening = useCallback(() => {
         if (recognitionRef.current && !isListening) {
             try {
+                shouldListenRef.current = true;
                 recognitionRef.current.start();
-                setIsListening(true);
             } catch (e) {
                 console.error(e);
             }
@@ -116,8 +107,8 @@ export const useSpeechRecognition = ({ onMatch }) => {
 
     const stopListening = useCallback(() => {
         if (recognitionRef.current && isListening) {
+            shouldListenRef.current = false;
             recognitionRef.current.stop();
-            setIsListening(false);
         }
     }, [isListening]);
 
