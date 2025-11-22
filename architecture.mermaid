@@ -1,0 +1,30 @@
+graph TD
+    subgraph "Google Cloud Run"
+        CloudRun["Cloud Run Service"]
+        Nginx["Nginx Server"]
+    end
+
+    subgraph "Browser Environment"
+        User["User (Chanting)"]
+        Mic["Microphone"]
+        WebSpeech["Web Speech API"]
+        ReactApp["React Application"]
+        LocalStorage[("localStorage")]
+        
+        User -->|"Voice Audio"| Mic
+        Mic -->|"Audio Stream"| WebSpeech
+        WebSpeech -->|"Interim Transcripts"| ReactApp
+        ReactApp -->|"Update Count"| ReactApp
+        ReactApp -->|"Persist Count"| LocalStorage
+    end
+
+    CloudRun -->|"HTTPS Request"| Nginx
+    Nginx -->|"Serve Static Files"| ReactApp
+
+    style CloudRun fill:#f9f,stroke:#333,stroke-width:2px
+    style Nginx fill:#e1f5fe,stroke:#333,stroke-width:2px
+    style User fill:#fff9c4,stroke:#333,stroke-width:2px
+    style Mic fill:#ffe0b2,stroke:#333,stroke-width:2px
+    style WebSpeech fill:#dcedc8,stroke:#333,stroke-width:2px
+    style ReactApp fill:#e1bee7,stroke:#333,stroke-width:2px
+    style LocalStorage fill:#f0f4c3,stroke:#333,stroke-width:2px
